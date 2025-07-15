@@ -3,9 +3,9 @@
         uses: actions/github-script@v7
         with:
           script: |
-            const projectNodeId = '${{ vars.PROJECT_NODE_ID }}'; // YOUR_PROJECT_NODE_ID - THIS IS A PLACEHOLDER FOR YOUR PROJECT ID
-            const statusFieldId = '${{ vars.STATUS_FIELD_ID }}'; // YOUR_STATUS_FIELD_ID - THIS IS A PLACEHOLDER FOR YOUR STATUS FIELD ID
-            const doneOptionId = '${{ vars.DONE_OPTION_ID }}'; // YOUR_DONE_OPTION_ID - THIS IS A PLACEHOLDER FOR YOUR "DONE" OPTION ID
+            const projectNodeId = 'PVT_kwHOCTnmh84A99wR'; // YOUR_PROJECT_NODE_ID - THIS IS A PLACEHOLDER FOR YOUR PROJECT ID
+            const statusFieldId = 'PVTSSF_lAHOCTnmh84A99wRzgxgqsU'; // YOUR_STATUS_FIELD_ID - THIS IS A PLACEHOLDER FOR YOUR STATUS FIELD ID
+            const doneOptionId = '98236657'; // YOUR_DONE_OPTION_ID - THIS IS A PLACEHOLDER FOR YOUR "DONE" OPTION ID
             const todoOptionId = 'f75ad846'; // Your actual 'Todo' option ID
             const inProgressOptionId = '47fc9ee4'; // Your actual 'In Progress' option ID
             
