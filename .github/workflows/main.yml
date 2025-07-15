@@ -1,1 +1,140 @@
-# test
+- name: Find Project Item and Update Status
+        if: steps.extract_info.outputs.should_update == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const projectNodeId = '${{ vars.PROJECT_NODE_ID }}'; // YOUR_PROJECT_NODE_ID - THIS IS A PLACEHOLDER FOR YOUR PROJECT ID
+            const statusFieldId = '${{ vars.STATUS_FIELD_ID }}'; // YOUR_STATUS_FIELD_ID - THIS IS A PLACEHOLDER FOR YOUR STATUS FIELD ID
+            const doneOptionId = '${{ vars.DONE_OPTION_ID }}'; // YOUR_DONE_OPTION_ID - THIS IS A PLACEHOLDER FOR YOUR "DONE" OPTION ID
+            const todoOptionId = 'f75ad846'; // Your actual 'Todo' option ID
+            const inProgressOptionId = '47fc9ee4'; // Your actual 'In Progress' option ID
+            
+            const issueNumber = parseInt(core.getState('issue_number'));
+            const projectStatus = core.getState('project_status');
+
+            // Set the appropriate option ID based on the extracted status keyword
+            let targetStatusOptionId;
+            switch (projectStatus) {
+              case 'Todo':
+                targetStatusOptionId = todoOptionId; 
+                break;
+              case 'In Progress':
+                targetStatusOptionId = inProgressOptionId;
+                break;
+              case 'Done':
+                targetStatusOptionId = doneOptionId;
+                break;
+              default:
+                core.warning(`Unknown project status: ${projectStatus}. Cannot update.`);
+                return;
+            }
+            
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            core.info(`Searching for Issue #${issueNumber} in repository ${owner}/${repo}`);
+
+            // 1. Find the Issue's node ID
+            const issueQuery = `
+              query ($owner: String!, $repo: String!, $issueNumber: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $issueNumber) {
+                    id # This is the issue's node ID
+                  }
+                }
+              }
+            `;
+            const issueResponse = await github.graphql(issueQuery, {
+              owner,
+              repo,
+              issueNumber,
+            });
+
+            const issueNodeId = issueResponse.repository?.issue?.id;
+
+            if (!issueNodeId) {
+              core.warning(`Could not find Issue #${issueNumber} in repository ${owner}/${repo}. Skipping project update.`);
+              return;
+            }
+
+            core.info(`Found Issue Node ID: ${issueNodeId}`);
+
+            // 2. Find the ProjectV2Item ID associated with this Issue Node ID within the project
+            const findItemQuery = `
+              query ($projectNodeId: ID!, $issueNodeId: ID!) {
+                node(id: $projectNodeId) {
+                  ... on ProjectV2 {
+                    items(first: 100, query: $issueNodeId) { # Query by content ID
+                      nodes {
+                        id # This is the ProjectV2Item ID
+                        content {
+                          ... on Issue {
+                            id # Make sure it matches our issueNodeId
+                          }
+                          ... on PullRequest { # Also check for Pull Requests
+                            id
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+            
+            const findItemResponse = await github.graphql(findItemQuery, {
+              projectNodeId,
+              issueNodeId,
+            });
+
+            const projectItemId = findItemResponse.node?.items?.nodes.find(
+              item => item.content?.id === issueNodeId
+            )?.id;
+
+            if (!projectItemId) {
+              core.warning(`Issue #${issueNumber} is not found as an item on Project (ID: ${projectNodeId}). Skipping update.`);
+              return;
+            }
+            
+            core.info(`Found Project Item ID: ${projectItemId}`);
+
+            // 3. Update the ProjectV2Item's Status field
+            const updateItemMutation = `
+              mutation ($projectNodeId: ID!, $itemId: ID!, $fieldId: ID!, $targetValue: ProjectV2ItemFieldSingleSelectValueInput!) {
+                updateProjectV2ItemFieldValue(
+                  input: {
+                    projectId: $projectNodeId,
+                    itemId: $itemId,
+                    fieldId: $fieldId,
+                    value: $targetValue
+                  }
+                ) {
+                  projectV2Item {
+                    id
+                  }
+                }
+              }
+            `;
+
+            const mutationVariables = {
+              projectNodeId,
+              itemId: projectItemId,
+              fieldId: statusFieldId,
+              targetValue: {
+                singleSelectOptionId: targetStatusOptionId
+              }
+            };
+
+            core.info(`Attempting to update Project Item ${projectItemId} status to ${projectStatus}...`);
+            await github.graphql(updateItemMutation, mutationVariables);
+            core.info(`Successfully updated Project Item ${projectItemId} status to ${projectStatus}.`);
+            
+            // These lines were causing issues in your screenshot as they were outside `script:`
+            // The `github-script` action handles passing state via core.saveState and core.getState internally.
+            // If you need to pass values between steps, use the `outputs` from the step that generates them.
+          # Pass the GitHub Token to the action for authentication
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Pass values from previous steps to be used within the JavaScript
+          # These are automatically available via `core.getState()` in the script
+          # because they were set using `echo "name=value" >> $GITHUB_OUTPUT` in the `extract_info` step.
+          # We don't need `env:` here because they are handled by `core.getState` within `github-script`.
